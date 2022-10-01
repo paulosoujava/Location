@@ -1,71 +1,70 @@
 package com.intelbras.location
 
 import android.Manifest
+import android.content.ComponentName
+import android.content.Context
 import android.content.Intent
+import android.content.ServiceConnection
 import android.os.Bundle
+import android.os.IBinder
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.height
-import androidx.compose.material.Button
-import androidx.compose.material.MaterialTheme
-import androidx.compose.material.Surface
-import androidx.compose.material.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.unit.dp
+import androidx.compose.animation.ExperimentalAnimationApi
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.core.app.ActivityCompat
 import com.intelbras.location.ui.theme.LocationTheme
+import com.intelbras.service.StopwatchService
+import dagger.hilt.android.AndroidEntryPoint
 
+
+@ExperimentalAnimationApi
+@AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+
+    private var isBound by mutableStateOf(false)
+    private lateinit var stopwatchService: StopwatchService
+    private val connection = object : ServiceConnection {
+        override fun onServiceConnected(className: ComponentName, service: IBinder  ) {
+            val binder = service as StopwatchService.StopwatchBinder
+            stopwatchService = binder.getService()
+            isBound = true
+        }
+
+        override fun onServiceDisconnected(arg0: ComponentName) {
+            isBound = false
+        }
+    }
+
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
             LocationTheme {
-                // A surface container using the 'background' color from the theme
-                Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colors.background
-                ) {
-                    ActivityCompat.requestPermissions(
-                        this,
-                        arrayOf(
-                            Manifest.permission.ACCESS_COARSE_LOCATION,
-                            Manifest.permission.ACCESS_FINE_LOCATION,
-                        ),
-                        0
-                    )
-                    Column(
-                        modifier = Modifier.fillMaxSize(),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
-                    ) {
-                        Button(onClick = {
-                          val it =  Intent(applicationContext, LocationService::class.java).apply {
-                                action = LocationService.ACTION_START
-                                startService(this)
-                            }
-                            startService(it)
-                        }) {
-                            Text(text = "Start")
-                        }
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Button(onClick = {
-                            Intent(applicationContext, LocationService::class.java).apply {
-                                action = LocationService.ACTION_STOP
-                                startService(this)
-                            }
-                        }) {
-                            Text(text = "Stop")
-                        }
-                    }
+                ActivityCompat.requestPermissions(
+                    this,
+                    arrayOf(
+                        Manifest.permission.ACCESS_COARSE_LOCATION,
+                        Manifest.permission.ACCESS_FINE_LOCATION,
+                    ),
+                    0
+                )
+                if (isBound) {
+                    MainScreen(stopwatchService = stopwatchService, applicationContext)
                 }
             }
+        }
+    }
+    override fun onStop() {
+        super.onStop()
+        unbindService(connection)
+        isBound = false
+    }
+    override fun onStart() {
+        super.onStart()
+        Intent(this, StopwatchService::class.java).also { intent ->
+            bindService(intent, connection, Context.BIND_AUTO_CREATE)
         }
     }
 }
